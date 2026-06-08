@@ -35,7 +35,7 @@ router.post('/', async (req, res) => {
 // Usa COALESCE para não sobrescrever campos não enviados (ex: ao marcar como paga)
 router.put('/:id', async (req, res) => {
   const pool = req.app.locals.pool;
-  const { descricao, fornecedor, valor, data_emissao, vencimento, codigo_barras, categoria, observacao, pago, data_pagamento, despesa_vinculada_id } = req.body;
+  const { descricao, fornecedor, valor, data_emissao, vencimento, codigo_barras, categoria, observacao, pago, data_pagamento, despesa_vinculada_id, valor_pago } = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE contas_pagar
@@ -49,7 +49,8 @@ router.put('/:id', async (req, res) => {
            observacao       = COALESCE($8,  observacao),
            pago             = COALESCE($9,  pago),
            data_pagamento   = COALESCE($10, data_pagamento),
-           despesa_vinculada_id = COALESCE($11, despesa_vinculada_id)
+           despesa_vinculada_id = COALESCE($11, despesa_vinculada_id),
+           valor_pago       = COALESCE($13, valor_pago)
        WHERE id=$12 RETURNING *`,
       [
         descricao   ?? null,
@@ -63,7 +64,8 @@ router.put('/:id', async (req, res) => {
         pago        !== undefined ? pago : null,
         data_pagamento    ?? null,
         despesa_vinculada_id ?? null,
-        req.params.id
+        req.params.id,
+        valor_pago  ?? null,
       ]
     );
     if (!rows.length) return res.status(404).json({ error: 'Não encontrado' });
