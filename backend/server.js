@@ -7,9 +7,11 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ---------- Banco de dados ----------
+// Conexões internas do Railway (railway.internal) não usam SSL
+const isInternalRailway = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('.railway.internal');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: isInternalRailway ? false : (process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false),
 });
 
 // Testa a conexão e cria as tabelas se não existirem
