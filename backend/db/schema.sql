@@ -62,6 +62,10 @@ CREATE TABLE IF NOT EXISTS contas_pagar (
   pago BOOLEAN DEFAULT FALSE,
   data_pagamento DATE,
   despesa_vinculada_id UUID REFERENCES despesas(id) ON DELETE SET NULL,
+  valor_pago NUMERIC(12,2),
   criado_por UUID REFERENCES usuarios(id),
   criado_em TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migração segura: adiciona coluna se a tabela já existia antes desta versão
+ALTER TABLE contas_pagar ADD COLUMN IF NOT EXISTS valor_pago NUMERIC(12,2);
