@@ -28,6 +28,18 @@ const formatBoleto = (codigo) => {
 // ---------------------------------------------------------------------------
 function getToken() { return localStorage.getItem(TOKEN_KEY); }
 
+// Decodifica o payload do JWT (sem verificar assinatura — apenas para UI)
+function getUserFromToken() {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload; // { id, email, iat, exp }
+  } catch { return null; }
+}
+
+const ADMIN_EMAIL = 'eduardomfvieira@gmail.com';
+
 async function apiFetch(method, path, body) {
   const token = getToken();
   const res = await fetch(`${BASE}${path}`, {
@@ -169,7 +181,8 @@ export default function App() {
   const [syncing, setSyncing] = useState(false);
   const [apiError, setApiError] = useState(null);
 
-  const [tab, setTab] = useState('dashboard');
+  const isAdmin = useMemo(() => getUserFromToken()?.email === ADMIN_EMAIL, [authToken]);
+  const [tab, setTab] = useState(() => getUserFromToken()?.email === ADMIN_EMAIL ? 'dashboard' : 'despesas');
   const [filtroMes, setFiltroMes] = useState(today().slice(0, 7));
 
   const loadAll = async () => {
@@ -266,7 +279,7 @@ export default function App() {
 
       <nav className="tabs">
         {[
-          { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+          ...(isAdmin ? [{ id: 'dashboard', label: 'Dashboard', icon: BarChart3 }] : []),
           { id: 'despesas', label: 'Despesas', icon: FileText },
           { id: 'contas', label: 'Contas a Pagar', icon: CreditCard },
         ].map(t => {
