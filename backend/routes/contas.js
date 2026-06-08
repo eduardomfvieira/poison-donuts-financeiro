@@ -32,16 +32,39 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/contas/:id
+// Usa COALESCE para não sobrescrever campos não enviados (ex: ao marcar como paga)
 router.put('/:id', async (req, res) => {
   const pool = req.app.locals.pool;
   const { descricao, fornecedor, valor, data_emissao, vencimento, codigo_barras, categoria, observacao, pago, data_pagamento, despesa_vinculada_id } = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE contas_pagar
-       SET descricao=$1, fornecedor=$2, valor=$3, data_emissao=$4, vencimento=$5,
-           codigo_barras=$6, categoria=$7, observacao=$8, pago=$9, data_pagamento=$10, despesa_vinculada_id=$11
+       SET descricao        = COALESCE($1,  descricao),
+           fornecedor       = COALESCE($2,  fornecedor),
+           valor            = COALESCE($3,  valor),
+           data_emissao     = COALESCE($4,  data_emissao),
+           vencimento       = COALESCE($5,  vencimento),
+           codigo_barras    = COALESCE($6,  codigo_barras),
+           categoria        = COALESCE($7,  categoria),
+           observacao       = COALESCE($8,  observacao),
+           pago             = COALESCE($9,  pago),
+           data_pagamento   = COALESCE($10, data_pagamento),
+           despesa_vinculada_id = COALESCE($11, despesa_vinculada_id)
        WHERE id=$12 RETURNING *`,
-      [descricao, fornecedor, valor, data_emissao, vencimento, codigo_barras, categoria, observacao, pago, data_pagamento, despesa_vinculada_id, req.params.id]
+      [
+        descricao   ?? null,
+        fornecedor  ?? null,
+        valor       ?? null,
+        data_emissao      ?? null,
+        vencimento        ?? null,
+        codigo_barras     ?? null,
+        categoria         ?? null,
+        observacao        ?? null,
+        pago        !== undefined ? pago : null,
+        data_pagamento    ?? null,
+        despesa_vinculada_id ?? null,
+        req.params.id
+      ]
     );
     if (!rows.length) return res.status(404).json({ error: 'Não encontrado' });
     res.json(rows[0]);
