@@ -25,6 +25,7 @@ INSERT INTO categorias (nome, grupo) VALUES
   ('Internet/Telefone', 'Fixos'), ('Salários', 'RH'),
   ('Benefícios', 'RH'), ('Vale Transporte', 'RH'),
   ('Férias', 'RH'), ('13º Salário', 'RH'),
+  ('Rescisão', 'RH'), ('FGTS Rescisório', 'RH'),
   ('Pró-labore', 'Sócios'), ('Dividendos', 'Sócios'),
   ('Impostos', 'Fiscal'), ('Marketing', 'Comercial'),
   ('Manutenção', 'Operacional'), ('Delivery/iFood', 'Comercial'),
