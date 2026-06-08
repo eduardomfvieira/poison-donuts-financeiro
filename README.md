@@ -93,3 +93,4 @@ A camada de persistência foi isolada no objeto `storage` dentro de `App.jsx` pa
 | Cartão de Crédito | Financeiro |
 | Royalties | Financeiro |
 | Outras | Geral |
+
