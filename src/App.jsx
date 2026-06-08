@@ -5,7 +5,7 @@ import { TrendingDown, AlertCircle, CheckCircle2, Clock, Plus, Trash2, Download,
 const TOKEN_KEY = 'pd_token';
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-const CATEGORIAS = ['Insumos', 'Embalagens', 'Fornecedores', 'Aluguel', 'Energia', 'Água', 'Internet/Telefone', 'Salários', 'Benefícios', 'Vale Transporte', 'Férias', '13º Salário', 'Rescisão', 'FGTS Rescisório', 'Pró-labore', 'Dividendos', 'Impostos', 'Marketing', 'Manutenção', 'Delivery/iFood', 'Cartão de Crédito', 'Royalties', 'Outras'];
+const CATEGORIAS = ['Insumos', 'Embalagens', 'Fornecedores', 'Aluguel', 'Energia', 'Água', 'Internet/Telefone', 'Salários', 'Benefícios', 'Vale Transporte', 'Férias', '13º Salário', 'Rescisão', 'FGTS Rescisório', 'Pró-labore', 'Dividendos', 'Impostos', 'Marketing', 'Manutenção', 'Delivery/iFood', 'Cartão de Crédito', 'Royalties', 'Juros/Multas', 'Outras'];
 
 const formatBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 const formatDate = (d) => {
@@ -84,6 +84,7 @@ function mapConta(c) {
     pago: c.pago,
     dataPagamento: c.data_pagamento ? c.data_pagamento.slice(0, 10) : null,
     despesaVinculadaId: c.despesa_vinculada_id || null,
+    valorPago: c.valor_pago ? Number(c.valor_pago) : null,
   };
 }
 
@@ -306,6 +307,7 @@ export default function App() {
             totalMes={totalMes}
             contasAbertas={contasAbertas}
             filtroMes={filtroMes}
+            contas={contas}
           />
         )}
         {tab === 'despesas' && (
@@ -335,7 +337,7 @@ export default function App() {
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
-function Dashboard({ despesasFiltradas, totalMes, contasAbertas }) {
+function Dashboard({ despesasFiltradas, totalMes, contasAbertas, filtroMes, contas }) {
   const porCategoria = useMemo(() => {
     const map = {};
     despesasFiltradas.forEach(d => { map[d.categoria] = (map[d.categoria] || 0) + Number(d.valor); });
@@ -350,6 +352,8 @@ function Dashboard({ despesasFiltradas, totalMes, contasAbertas }) {
 
   const COLORS = ['#ff3d8a', '#ff7eb6', '#fde047', '#22d3ee', '#a3e635', '#c084fc', '#fb923c', '#f472b6'];
   const contasVencidas = contasAbertas.filter(c => c.vencimento < today());
+  const contasPagasMes = (contas || []).filter(c => c.pago && c.dataPagamento && c.dataPagamento.startsWith(filtroMes));
+  const totalJurosMes = contasPagasMes.reduce((s, c) => s + Math.max(0, (c.valorPago || c.valor) - c.valor), 0);
   const contasProximas = contasAbertas.filter(c => c.vencimento >= today() && c.vencimento <= new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
   const totalContasAbertas = contasAbertas.reduce((s, c) => s + Number(c.valor), 0);
   const totalVencidas = contasVencidas.reduce((s, c) => s + Number(c.valor), 0);
@@ -376,6 +380,14 @@ function Dashboard({ despesasFiltradas, totalMes, contasAbertas }) {
             <div className="kpi-label">Vencidas</div>
             <div className="kpi-value">{formatBRL(totalVencidas)}</div>
             <div className="kpi-sub">{contasVencidas.length} conta{contasVencidas.length !== 1 ? 's' : ''}</div>
+          </div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-icon kpi-icon-juros"><TrendingDown size={18} /></div>
+          <div className="kpi-content">
+            <div className="kpi-label">Juros/Multas no mês</div>
+            <div className="kpi-value">{formatBRL(totalJurosMes)}</div>
+            <div className="kpi-sub">{contasPagasMes.filter(c => (c.valorPago || c.valor) > c.valor).length} pagamento{contasPagasMes.filter(c => (c.valorPago || c.valor) > c.valor).length !== 1 ? 's' : ''} com juros</div>
           </div>
         </div>
       </div>
@@ -627,6 +639,7 @@ function Contas({ contas, setContas, despesas, setDespesas, setSyncing }) {
   const [confirmar, setConfirmar] = useState(null);
   const [pagarModal, setPagarModal] = useState(null);
   const [dataPagamentoInput, setDataPagamentoInput] = useState(today());
+  const [valorPagoInput, setValorPagoInput] = useState('');
   const [editando, setEditando] = useState(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -659,26 +672,45 @@ function Contas({ contas, setContas, despesas, setDespesas, setSyncing }) {
     if (!pagarModal) return;
     const conta = pagarModal;
     const dataPag = dataPagamentoInput || today();
+    const valorPago = parseFloat(valorPagoInput) || Number(conta.valor);
+    const juros = Math.max(0, valorPago - Number(conta.valor));
     setSyncing(true);
     try {
-      // Cria a despesa vinculada
+      // Cria a despesa principal (valor efetivamente pago)
       const novaDespesa = await apiFetch('POST', '/api/despesas', {
         data: dataPag,
         descricao: conta.descricao,
         categoria: conta.categoria || 'Outras',
-        valor: Number(conta.valor),
+        valor: valorPago,
         fornecedor: conta.fornecedor || null,
         forma_pagamento: conta.codigoBarras ? 'Boleto' : 'PIX',
         observacao: conta.observacao || null,
       });
+      // Se houve juros, cria despesa separada de Juros/Multas
+      let despesaJuros = null;
+      if (juros > 0.001) {
+        despesaJuros = await apiFetch('POST', '/api/despesas', {
+          data: dataPag,
+          descricao: `Juros/Multa — ${conta.descricao}`,
+          categoria: 'Juros/Multas',
+          valor: juros,
+          fornecedor: conta.fornecedor || null,
+          forma_pagamento: conta.codigoBarras ? 'Boleto' : 'PIX',
+          observacao: null,
+        });
+      }
       // Atualiza a conta como paga
       const contaAtualizada = await apiFetch('PUT', `/api/contas/${conta.id}`, {
         pago: true,
         data_pagamento: dataPag,
         despesa_vinculada_id: novaDespesa.id,
+        valor_pago: valorPago,
       });
       setContas(contas.map(c => c.id === conta.id ? mapConta(contaAtualizada) : c));
-      setDespesas([mapDespesa(novaDespesa), ...despesas]);
+      const novasDespesas = despesaJuros
+        ? [mapDespesa(novaDespesa), mapDespesa(despesaJuros), ...despesas]
+        : [mapDespesa(novaDespesa), ...despesas];
+      setDespesas(novasDespesas);
       setPagarModal(null);
     } catch (e) {
       alert('Erro ao confirmar pagamento: ' + e.message);
@@ -855,7 +887,7 @@ function Contas({ contas, setContas, despesas, setDespesas, setSyncing }) {
                   )}
                   {c.observacao && <div className="conta-obs">{c.observacao}</div>}
                   <div className="conta-actions">
-                    <button className="btn-pay" onClick={() => { setDataPagamentoInput(today()); setPagarModal(c); }}><CheckCircle2 size={14} /> Marcar como paga</button>
+                    <button className="btn-pay" onClick={() => { setDataPagamentoInput(today()); setValorPagoInput(String(c.valor)); setPagarModal(c); }}><CheckCircle2 size={14} /> Marcar como paga</button>
                     <button className="btn-edit" onClick={() => setEditando({ ...c })}><Pencil size={14} /> Editar</button>
                     <button className="icon-btn" onClick={() => setConfirmar(c)}><Trash2 size={14} /></button>
                   </div>
@@ -925,24 +957,38 @@ function Contas({ contas, setContas, despesas, setDespesas, setSyncing }) {
         </div>
       )}
 
-      {pagarModal && (
-        <div className="modal-overlay" onClick={() => setPagarModal(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3>Confirmar pagamento</h3>
-            <p className="modal-text"><strong>{pagarModal.descricao}</strong><br /><span className="muted">Vencimento: {formatDate(pagarModal.vencimento)} · {formatBRL(pagarModal.valor)}</span></p>
-            <div className="form-field" style={{ marginBottom: 16 }}>
-              <label>Data do pagamento</label>
-              <input type="date" value={dataPagamentoInput} onChange={e => setDataPagamentoInput(e.target.value)} />
-              {dataPagamentoInput && pagarModal.vencimento && dataPagamentoInput > pagarModal.vencimento && <div className="muted-warn" style={{ marginTop: 6 }}>⚠ Pagamento após o vencimento</div>}
-            </div>
-            <p className="modal-info">Uma despesa será criada automaticamente na data informada.</p>
-            <div className="modal-actions">
-              <button className="btn-soft" onClick={() => setPagarModal(null)}>Cancelar</button>
-              <button className="btn-pay" onClick={confirmarPagamento}><CheckCircle2 size={14} /> Confirmar pagamento</button>
+      {pagarModal && (() => {
+        const jurosCalculado = Math.max(0, (parseFloat(valorPagoInput) || Number(pagarModal.valor)) - Number(pagarModal.valor));
+        return (
+          <div className="modal-overlay" onClick={() => setPagarModal(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <h3>Confirmar pagamento</h3>
+              <p className="modal-text"><strong>{pagarModal.descricao}</strong><br /><span className="muted">Vencimento: {formatDate(pagarModal.vencimento)} · Valor original: {formatBRL(pagarModal.valor)}</span></p>
+              <div className="form-field" style={{ marginBottom: 12 }}>
+                <label>Data do pagamento</label>
+                <input type="date" value={dataPagamentoInput} onChange={e => setDataPagamentoInput(e.target.value)} />
+                {dataPagamentoInput && pagarModal.vencimento && dataPagamentoInput > pagarModal.vencimento && <div className="muted-warn" style={{ marginTop: 6 }}>⚠ Pagamento após o vencimento</div>}
+              </div>
+              <div className="form-field" style={{ marginBottom: 12 }}>
+                <label>Valor pago (R$)</label>
+                <input type="number" step="0.01" value={valorPagoInput} onChange={e => setValorPagoInput(e.target.value)} />
+              </div>
+              {jurosCalculado > 0.001 && (
+                <div className="juros-info">
+                  <span className="juros-label">Juros/Multa calculado:</span>
+                  <span className="juros-valor">{formatBRL(jurosCalculado)}</span>
+                  <span className="juros-detalhe">Uma despesa separada de Juros/Multas será criada.</span>
+                </div>
+              )}
+              <p className="modal-info">Uma despesa será criada automaticamente na data informada.</p>
+              <div className="modal-actions">
+                <button className="btn-soft" onClick={() => setPagarModal(null)}>Cancelar</button>
+                <button className="btn-pay" onClick={confirmarPagamento}><CheckCircle2 size={14} /> Confirmar pagamento</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {confirmar && (
         <div className="modal-overlay" onClick={() => setConfirmar(null)}>
@@ -1033,6 +1079,7 @@ const styles = `
   .kpi-icon { width: 36px; height: 36px; background: rgba(255, 61, 138, 0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #ff3d8a; flex-shrink: 0; }
   .kpi-icon-warn { background: rgba(253, 224, 71, 0.12); color: #fde047; }
   .kpi-icon-danger { background: rgba(248, 113, 113, 0.12); color: #f87171; }
+  .kpi-icon-juros { background: rgba(251, 146, 60, 0.12); color: #fb923c; }
   .kpi-label { font-size: 11px; color: #8a7080; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
   .kpi-value { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 22px; color: #f4e8ee; margin-top: 4px; letter-spacing: -0.02em; }
   .kpi-value-big { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 38px; color: #ff3d8a; margin-top: 8px; letter-spacing: -0.03em; line-height: 1; }
@@ -1108,6 +1155,10 @@ const styles = `
   .data-info { font-size: 12px; color: #8a7080; }
   .data-info strong { color: #f4e8ee; font-weight: 600; }
   .modal-info { color: #8a7080; font-size: 12px; margin-bottom: 20px; text-align: center; font-style: italic; }
+  .juros-info { background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.3); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 2px; }
+  .juros-label { font-size: 11px; color: #fb923c; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+  .juros-valor { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 20px; color: #fb923c; }
+  .juros-detalhe { font-size: 11px; color: #8a7080; margin-top: 2px; }
 
   .contas-list { display: flex; flex-direction: column; gap: 12px; }
   .conta-card { background: rgba(0, 0, 0, 0.25); border: 1px solid #2a1a24; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
