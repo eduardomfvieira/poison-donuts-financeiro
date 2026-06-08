@@ -7,7 +7,7 @@ const STORAGE_KEY = 'poison_donuts_v1';
 const DEFAULT_DATA = {
   despesas: [],
   contas: [],
-  categorias: ['Insumos', 'Embalagens', 'Fornecedores', 'Aluguel', 'Energia', 'Água', 'Internet/Telefone', 'Salários', 'Benefícios', 'Vale Transporte', 'Férias', '13º Salário', 'Pró-labore', 'Dividendos', 'Impostos', 'Marketing', 'Manutenção', 'Delivery/iFood', 'Cartão de Crédito', 'Royalties', 'Outras'],
+  categorias: ['Insumos', 'Embalagens', 'Fornecedores', 'Aluguel', 'Energia', 'Água', 'Internet/Telefone', 'Salários', 'Benefícios', 'Vale Transporte', 'Férias', '13º Salário', 'Rescisão', 'FGTS Rescisório', 'Pró-labore', 'Dividendos', 'Impostos', 'Marketing', 'Manutenção', 'Delivery/iFood', 'Cartão de Crédito', 'Royalties', 'Outras'],
 };
 
 const formatBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
