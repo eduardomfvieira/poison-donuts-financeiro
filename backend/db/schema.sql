@@ -69,3 +69,17 @@ CREATE TABLE IF NOT EXISTS contas_pagar (
 
 -- Migração segura: adiciona coluna se a tabela já existia antes desta versão
 ALTER TABLE contas_pagar ADD COLUMN IF NOT EXISTS valor_pago NUMERIC(12,2);
+
+-- Receitas diárias (loja física, metro, delivery)
+CREATE TABLE IF NOT EXISTS receitas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  data DATE NOT NULL,
+  loja_fisica NUMERIC(12,2) NOT NULL DEFAULT 0,
+  metro NUMERIC(12,2) NOT NULL DEFAULT 0,
+  delivery NUMERIC(12,2) NOT NULL DEFAULT 0,
+  criado_por UUID REFERENCES usuarios(id),
+  criado_em TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Índice único por data (uma entrada por dia, upsert seguro)
+CREATE UNIQUE INDEX IF NOT EXISTS receitas_data_unique ON receitas (data);
