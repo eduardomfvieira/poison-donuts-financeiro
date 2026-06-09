@@ -37,6 +37,7 @@ app.use(express.json());
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/despesas', require('./routes/despesas'));
 app.use('/api/contas', require('./routes/contas'));
+app.use('/api/receitas', require('./routes/receitas'));
 app.use('/api/categorias', require('./routes/categorias'));
 
 // Health check
