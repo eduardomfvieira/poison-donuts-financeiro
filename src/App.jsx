@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { TrendingDown, AlertCircle, CheckCircle2, Clock, Plus, Trash2, Download, FileText, BarChart3, CreditCard, Copy, Check, Pencil, LogOut } from 'lucide-react';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, ComposedChart, Line } from 'recharts';
+import { TrendingDown, TrendingUp, AlertCircle, CheckCircle2, Clock, Plus, Trash2, Download, FileText, BarChart3, CreditCard, Copy, Check, Pencil, LogOut } from 'lucide-react';
 
 const TOKEN_KEY = 'pd_token';
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -67,6 +67,20 @@ function mapDespesa(d) {
     formaPagamento: d.forma_pagamento || 'PIX',
     observacao: d.observacao || '',
     contaOrigemId: d.conta_origem_id || null,
+  };
+}
+
+function mapReceita(r) {
+  const loja = Number(r.loja_fisica) || 0;
+  const metro = Number(r.metro) || 0;
+  const delivery = Number(r.delivery) || 0;
+  return {
+    id: r.id,
+    data: r.data ? r.data.slice(0, 10) : '',
+    lojaFisica: loja,
+    metro,
+    delivery,
+    total: loja + metro + delivery,
   };
 }
 
@@ -178,6 +192,7 @@ export default function App() {
 
   const [despesas, setDespesas] = useState([]);
   const [contas, setContas] = useState([]);
+  const [receitas, setReceitas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [apiError, setApiError] = useState(null);
@@ -190,12 +205,14 @@ export default function App() {
     setLoading(true);
     setApiError(null);
     try {
-      const [d, c] = await Promise.all([
+      const [d, c, r] = await Promise.all([
         apiFetch('GET', `/api/despesas`),
         apiFetch('GET', '/api/contas'),
+        apiFetch('GET', '/api/receitas'),
       ]);
       setDespesas(d.map(mapDespesa));
       setContas(c.map(mapConta));
+      setReceitas(r.map(mapReceita));
     } catch (e) {
       if (e.message.toLowerCase().includes('token') || e.message.includes('401')) {
         logout();
@@ -283,6 +300,7 @@ export default function App() {
           ...(isAdmin ? [{ id: 'dashboard', label: 'Dashboard', icon: BarChart3 }] : []),
           { id: 'despesas', label: 'Despesas', icon: FileText },
           { id: 'contas', label: 'Contas a Pagar', icon: CreditCard },
+          { id: 'receitas', label: 'Receitas', icon: TrendingUp },
         ].map(t => {
           const Icon = t.icon;
           return (
@@ -308,6 +326,8 @@ export default function App() {
             contasAbertas={contasAbertas}
             filtroMes={filtroMes}
             contas={contas}
+            despesas={despesas}
+            receitas={receitas}
           />
         )}
         {tab === 'despesas' && (
@@ -329,6 +349,14 @@ export default function App() {
             setSyncing={setSyncing}
           />
         )}
+        {tab === 'receitas' && (
+          <Receitas
+            receitas={receitas}
+            setReceitas={setReceitas}
+            setSyncing={setSyncing}
+            filtroMes={filtroMes}
+          />
+        )}
       </main>
     </div>
   );
@@ -337,7 +365,11 @@ export default function App() {
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
-function Dashboard({ despesasFiltradas, totalMes, contasAbertas, filtroMes, contas }) {
+function Dashboard({ despesasFiltradas, totalMes, contasAbertas, filtroMes, contas, despesas, receitas }) {
+  const defaultFrom = (() => { const d = new Date(); d.setMonth(d.getMonth() - 5); return d.toISOString().slice(0, 7); })();
+  const [compFrom, setCompFrom] = useState(defaultFrom);
+  const [compTo, setCompTo] = useState(today().slice(0, 7));
+
   const porCategoria = useMemo(() => {
     const map = {};
     despesasFiltradas.forEach(d => { map[d.categoria] = (map[d.categoria] || 0) + Number(d.valor); });
@@ -349,6 +381,27 @@ function Dashboard({ despesasFiltradas, totalMes, contasAbertas, filtroMes, cont
     despesasFiltradas.forEach(d => { const dia = d.data.slice(8, 10); days[dia] = (days[dia] || 0) + Number(d.valor); });
     return Object.entries(days).map(([dia, valor]) => ({ dia, valor })).sort((a, b) => a.dia.localeCompare(b.dia));
   }, [despesasFiltradas]);
+
+  // Receita e resultado do mês selecionado
+  const totalReceitaMes = (receitas || []).filter(r => r.data && r.data.startsWith(filtroMes)).reduce((s, r) => s + r.total, 0);
+  const resultadoBruto = totalReceitaMes - totalMes;
+
+  // Comparativo de período livre
+  const comparativoMensal = useMemo(() => {
+    if (!compFrom || !compTo || compFrom > compTo) return [];
+    const months = [];
+    const cur = new Date(compFrom + '-01');
+    const end = new Date(compTo + '-01');
+    while (cur <= end) {
+      const m = cur.toISOString().slice(0, 7);
+      const label = m.slice(5, 7) + '/' + m.slice(2, 4);
+      const despMes = (despesas || []).filter(d => d.data && d.data.startsWith(m)).reduce((s, d) => s + Number(d.valor), 0);
+      const recMes = (receitas || []).filter(r => r.data && r.data.startsWith(m)).reduce((s, r) => s + r.total, 0);
+      months.push({ mes: label, receita: recMes, despesa: despMes, resultado: recMes - despMes });
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    return months;
+  }, [despesas, receitas, compFrom, compTo]);
 
   const COLORS = ['#ff3d8a', '#ff7eb6', '#fde047', '#22d3ee', '#a3e635', '#c084fc', '#fb923c', '#f472b6'];
   const contasVencidas = contasAbertas.filter(c => c.vencimento < today());
@@ -388,6 +441,35 @@ function Dashboard({ despesasFiltradas, totalMes, contasAbertas, filtroMes, cont
             <div className="kpi-label">Juros/Multas no mês</div>
             <div className="kpi-value">{formatBRL(totalJurosMes)}</div>
             <div className="kpi-sub">{contasPagasMes.filter(c => (c.valorPago || c.valor) > c.valor).length} pagamento{contasPagasMes.filter(c => (c.valorPago || c.valor) > c.valor).length !== 1 ? 's' : ''} com juros</div>
+          </div>
+        </div>
+      </div>
+
+      {/* KPIs de receita */}
+      <div className="kpi-grid" style={{ marginTop: 0 }}>
+        <div className="kpi kpi-receita">
+          <div className="kpi-label">Receita bruta no mês</div>
+          <div className="kpi-value-big" style={{ color: '#a3e635' }}>{formatBRL(totalReceitaMes)}</div>
+          <div className="kpi-sub">Loja Física + Metro + Delivery</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-icon" style={{ background: resultadoBruto >= 0 ? 'rgba(163,230,53,0.12)' : 'rgba(248,113,113,0.12)', color: resultadoBruto >= 0 ? '#a3e635' : '#f87171' }}>
+            {resultadoBruto >= 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
+          </div>
+          <div className="kpi-content">
+            <div className="kpi-label">Resultado bruto no mês</div>
+            <div className="kpi-value" style={{ color: resultadoBruto >= 0 ? '#a3e635' : '#f87171' }}>{formatBRL(resultadoBruto)}</div>
+            <div className="kpi-sub">Receita − Despesa</div>
+          </div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-icon" style={{ background: 'rgba(163,230,53,0.12)', color: '#a3e635' }}><TrendingUp size={18} /></div>
+          <div className="kpi-content">
+            <div className="kpi-label">Margem bruta</div>
+            <div className="kpi-value" style={{ color: totalReceitaMes > 0 ? (resultadoBruto >= 0 ? '#a3e635' : '#f87171') : '#8a7080' }}>
+              {totalReceitaMes > 0 ? `${((resultadoBruto / totalReceitaMes) * 100).toFixed(1)}%` : '—'}
+            </div>
+            <div className="kpi-sub">Resultado / Receita</div>
           </div>
         </div>
       </div>
@@ -475,6 +557,42 @@ function Dashboard({ despesasFiltradas, totalMes, contasAbertas, filtroMes, cont
               );
             })}
           </div>
+        )}
+      </div>
+
+      {/* Gráfico comparativo de período */}
+      <div className="card">
+        <div className="comp-header">
+          <h3>Receita × Despesa por período</h3>
+          <div className="comp-filtros">
+            <div className="comp-filtro-group">
+              <label>De</label>
+              <input type="month" value={compFrom} onChange={e => setCompFrom(e.target.value)} className="month-picker" />
+            </div>
+            <div className="comp-filtro-group">
+              <label>Até</label>
+              <input type="month" value={compTo} onChange={e => setCompTo(e.target.value)} className="month-picker" />
+            </div>
+          </div>
+        </div>
+        {comparativoMensal.length === 0 ? (
+          <div className="empty">Selecione um período válido</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={comparativoMensal} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a1a24" />
+              <XAxis dataKey="mes" stroke="#8a7080" style={{ fontSize: 12 }} />
+              <YAxis stroke="#8a7080" style={{ fontSize: 12 }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
+              <Tooltip
+                formatter={(v, name) => [formatBRL(v), name === 'receita' ? 'Receita' : name === 'despesa' ? 'Despesa' : 'Resultado']}
+                contentStyle={{ background: '#1a0a14', border: '1px solid #ff3d8a', borderRadius: 8, color: '#fff' }}
+              />
+              <Legend wrapperStyle={{ fontSize: 12, color: '#d4c4cf' }} formatter={v => v === 'receita' ? 'Receita' : v === 'despesa' ? 'Despesa' : 'Resultado'} />
+              <Bar dataKey="receita" fill="#a3e635" opacity={0.85} radius={[4, 4, 0, 0]} name="receita" />
+              <Bar dataKey="despesa" fill="#ff3d8a" opacity={0.85} radius={[4, 4, 0, 0]} name="despesa" />
+              <Line type="monotone" dataKey="resultado" stroke="#fde047" strokeWidth={2} dot={{ fill: '#fde047', r: 4 }} name="resultado" />
+            </ComposedChart>
+          </ResponsiveContainer>
         )}
       </div>
     </div>
@@ -622,6 +740,166 @@ function Despesas({ despesas, setDespesas, setSyncing, despesasFiltradas, totalM
             <div className="modal-actions">
               <button className="btn-soft" onClick={() => setConfirmar(null)}>Cancelar</button>
               <button className="btn-danger" onClick={remover}><Trash2 size={14} /> Excluir</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Contas a pagar
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Receitas
+// ---------------------------------------------------------------------------
+function Receitas({ receitas, setReceitas, setSyncing, filtroMes }) {
+  const [form, setForm] = useState({ data: today(), lojaFisica: '', metro: '', delivery: '' });
+  const [salvando, setSalvando] = useState(false);
+  const [confirmar, setConfirmar] = useState(null);
+
+  const receitasFiltradas = receitas
+    .filter(r => r.data && r.data.startsWith(filtroMes))
+    .sort((a, b) => b.data.localeCompare(a.data));
+
+  const totalMesRec = receitasFiltradas.reduce((s, r) => s + r.total, 0);
+  const totalLoja = receitasFiltradas.reduce((s, r) => s + r.lojaFisica, 0);
+  const totalMetro = receitasFiltradas.reduce((s, r) => s + r.metro, 0);
+  const totalDelivery = receitasFiltradas.reduce((s, r) => s + r.delivery, 0);
+
+  const salvar = async () => {
+    if (!form.data) return;
+    setSalvando(true);
+    setSyncing(true);
+    try {
+      const nova = await apiFetch('POST', '/api/receitas', {
+        data: form.data,
+        loja_fisica: Number(form.lojaFisica) || 0,
+        metro: Number(form.metro) || 0,
+        delivery: Number(form.delivery) || 0,
+      });
+      const mapped = mapReceita(nova);
+      const exists = receitas.find(r => r.data === mapped.data);
+      setReceitas(exists
+        ? receitas.map(r => r.data === mapped.data ? mapped : r)
+        : [mapped, ...receitas]);
+      setForm({ data: today(), lojaFisica: '', metro: '', delivery: '' });
+    } catch (e) {
+      alert('Erro ao salvar: ' + e.message);
+    } finally {
+      setSalvando(false);
+      setSyncing(false);
+    }
+  };
+
+  const excluir = async () => {
+    if (!confirmar) return;
+    setSyncing(true);
+    try {
+      await apiFetch('DELETE', `/api/receitas/${confirmar.id}`);
+      setReceitas(receitas.filter(r => r.id !== confirmar.id));
+      setConfirmar(null);
+    } catch (e) {
+      alert('Erro: ' + e.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const editar = (r) => {
+    setForm({ data: r.data, lojaFisica: String(r.lojaFisica || ''), metro: String(r.metro || ''), delivery: String(r.delivery || '') });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="section">
+      <div className="card">
+        <h3>Lançar Receita Diária</h3>
+        <div className="form-grid receitas-form">
+          <div className="form-field">
+            <label>Data</label>
+            <input type="date" value={form.data} onChange={e => setForm({ ...form, data: e.target.value })} />
+          </div>
+          <div className="form-field">
+            <label>Loja Física (R$)</label>
+            <input type="number" step="0.01" min="0" placeholder="0,00" value={form.lojaFisica} onChange={e => setForm({ ...form, lojaFisica: e.target.value })} />
+          </div>
+          <div className="form-field">
+            <label>Metro (R$)</label>
+            <input type="number" step="0.01" min="0" placeholder="0,00" value={form.metro} onChange={e => setForm({ ...form, metro: e.target.value })} />
+          </div>
+          <div className="form-field">
+            <label>Delivery (R$)</label>
+            <input type="number" step="0.01" min="0" placeholder="0,00" value={form.delivery} onChange={e => setForm({ ...form, delivery: e.target.value })} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+          <p style={{ fontSize: 12, color: '#8a7080', fontStyle: 'italic' }}>
+            Se já existir um lançamento para esta data, ele será atualizado.
+          </p>
+          <button className="btn-primary" onClick={salvar} disabled={salvando}>
+            <Plus size={14} /> {salvando ? 'Salvando...' : 'Salvar / Atualizar'}
+          </button>
+        </div>
+      </div>
+
+      <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+          <h3>Receitas do Mês</h3>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: '#8a7080' }}>Loja Física: <strong style={{ color: '#f4e8ee' }}>{formatBRL(totalLoja)}</strong></span>
+            <span style={{ fontSize: 12, color: '#8a7080' }}>Metro: <strong style={{ color: '#f4e8ee' }}>{formatBRL(totalMetro)}</strong></span>
+            <span style={{ fontSize: 12, color: '#8a7080' }}>Delivery: <strong style={{ color: '#f4e8ee' }}>{formatBRL(totalDelivery)}</strong></span>
+            <span style={{ fontSize: 13, color: '#a3e635', fontWeight: 700, fontFamily: "'Bricolage Grotesque', sans-serif" }}>{formatBRL(totalMesRec)}</span>
+          </div>
+        </div>
+        {receitasFiltradas.length === 0 ? (
+          <div className="empty">Nenhuma receita lançada neste mês</div>
+        ) : (
+          <div className="table-wrap">
+            <table className="receitas-table">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Loja Física</th>
+                  <th>Metro</th>
+                  <th>Delivery</th>
+                  <th>Total</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {receitasFiltradas.map(r => (
+                  <tr key={r.id}>
+                    <td>{formatDate(r.data)}</td>
+                    <td>{formatBRL(r.lojaFisica)}</td>
+                    <td>{formatBRL(r.metro)}</td>
+                    <td>{formatBRL(r.delivery)}</td>
+                    <td style={{ fontWeight: 700, color: '#a3e635' }}>{formatBRL(r.total)}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="btn-icon" onClick={() => editar(r)} title="Editar"><Pencil size={13} /></button>
+                        <button className="btn-icon btn-icon-danger" onClick={() => setConfirmar(r)} title="Excluir"><Trash2 size={13} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {confirmar && (
+        <div className="modal-overlay" onClick={() => setConfirmar(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3>Excluir receita?</h3>
+            <p className="modal-text">{formatDate(confirmar.data)} · {formatBRL(confirmar.total)}</p>
+            <p className="modal-warn">Esta ação não pode ser desfeita.</p>
+            <div className="modal-actions">
+              <button className="btn-soft" onClick={() => setConfirmar(null)}>Cancelar</button>
+              <button className="btn-danger" onClick={excluir}><Trash2 size={14} /> Excluir</button>
             </div>
           </div>
         </div>
@@ -1182,4 +1460,14 @@ const styles = `
   .modal-text { color: #f4e8ee; font-size: 14px; line-height: 1.5; margin-bottom: 12px; padding: 12px; background: rgba(0, 0, 0, 0.3); border-radius: 8px; border-left: 3px solid #ff3d8a; }
   .modal-warn { color: #fb923c; font-size: 12px; margin-bottom: 20px; text-align: center; }
   .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .receitas-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .receitas-table th { text-align: left; padding: 8px 12px; font-size: 11px; color: #8a7080; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #2a1a24; }
+  .receitas-table td { padding: 10px 12px; border-bottom: 1px solid #1a0a14; color: #f4e8ee; vertical-align: middle; }
+  .receitas-table tr:hover td { background: rgba(255,61,138,0.04); }
+  .receitas-form { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .comp-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+  .comp-filtros { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .comp-filtro-group { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8a7080; }
+  .kpi-receita { background: linear-gradient(135deg, rgba(163,230,53,0.15) 0%, rgba(163,230,53,0.04) 100%); border-color: rgba(163,230,53,0.5); flex-direction: column; align-items: flex-start; }
+  .kpi-value-big { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 26px; line-height: 1.1; margin: 4px 0; }
 `;
