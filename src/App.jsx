@@ -1174,6 +1174,8 @@ function Contas({ contas, setContas, despesas, setDespesas, setSyncing }) {
   };
 
   const abertas = contas.filter(c => !c.pago).sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+  const contasVencidasList = abertas.filter(c => c.vencimento < today());
+  const contasAVencer = abertas.filter(c => c.vencimento >= today());
   const pagas = contas.filter(c => c.pago).sort((a, b) => (b.dataPagamento || '').localeCompare(a.dataPagamento || ''));
 
   return (
@@ -1221,17 +1223,23 @@ function Contas({ contas, setContas, despesas, setDespesas, setSyncing }) {
         </div>
       </div>
 
-      <div className="card">
-        <h3>Em aberto ({abertas.length}) — {formatBRL(abertas.reduce((s, c) => s + Number(c.valor), 0))}</h3>
-        {abertas.length === 0 ? (
-          <div className="empty">Nenhuma conta em aberto 🎉</div>
-        ) : (
-          <div className="contas-list">
-            {abertas.map(c => {
-              const vencida = c.vencimento < today();
-              const proxima = !vencida && c.vencimento <= new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-              return (
-                <div key={c.id} className={`conta-card ${vencida ? 'conta-vencida' : proxima ? 'conta-proxima' : ''}`}>
+      <div className="contas-split-row">
+        {/* Coluna: Vencidas */}
+        <div className="contas-col">
+          <div className="contas-col-header contas-col-header-vencida">
+            <span className="contas-col-title">⚠ Vencidas</span>
+            <span className="contas-col-total">
+              {contasVencidasList.length > 0
+                ? `${contasVencidasList.length} conta${contasVencidasList.length !== 1 ? 's' : ''} · ${formatBRL(contasVencidasList.reduce((s, c) => s + Number(c.valor), 0))}`
+                : 'Nenhuma 🎉'}
+            </span>
+          </div>
+          {contasVencidasList.length === 0 ? (
+            <div className="empty">Sem contas vencidas 🎉</div>
+          ) : (
+            <div className="contas-list">
+              {contasVencidasList.map(c => (
+                <div key={c.id} className="conta-card conta-vencida">
                   <div className="conta-header">
                     <div>
                       <div className="conta-desc">{c.descricao}</div>
@@ -1240,11 +1248,9 @@ function Contas({ contas, setContas, despesas, setDespesas, setSyncing }) {
                     <div className="conta-valor">{formatBRL(c.valor)}</div>
                   </div>
                   <div className="conta-meta">
-                    <span className={`status-pill ${vencida ? 'pill-vencida' : proxima ? 'pill-proxima' : 'pill-aberta'}`}>
-                      {vencida ? '⚠ Vencida' : proxima ? '⏰ Próxima' : 'Em aberto'}
-                    </span>
+                    <span className="status-pill pill-vencida">⚠ Vencida</span>
                     {c.dataEmissao && <span className="data-info">Emissão: <strong>{formatDate(c.dataEmissao)}</strong></span>}
-                    <span className="data-info">Vence: <strong>{formatDate(c.vencimento)}</strong></span>
+                    <span className="data-info">Venceu: <strong>{formatDate(c.vencimento)}</strong></span>
                     {c.categoria && <span className="tag-small">{c.categoria}</span>}
                   </div>
                   {c.codigoBarras && (
@@ -1262,10 +1268,64 @@ function Contas({ contas, setContas, despesas, setDespesas, setSyncing }) {
                     <button className="icon-btn" onClick={() => setConfirmar(c)}><Trash2 size={14} /></button>
                   </div>
                 </div>
-              );
-            })}
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Coluna: A Vencer */}
+        <div className="contas-col">
+          <div className="contas-col-header contas-col-header-aberta">
+            <span className="contas-col-title">📅 A Vencer</span>
+            <span className="contas-col-total">
+              {contasAVencer.length > 0
+                ? `${contasAVencer.length} conta${contasAVencer.length !== 1 ? 's' : ''} · ${formatBRL(contasAVencer.reduce((s, c) => s + Number(c.valor), 0))}`
+                : 'Nenhuma'}
+            </span>
           </div>
-        )}
+          {contasAVencer.length === 0 ? (
+            <div className="empty">Sem contas a vencer</div>
+          ) : (
+            <div className="contas-list">
+              {contasAVencer.map(c => {
+                const proxima = c.vencimento <= new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+                return (
+                  <div key={c.id} className={`conta-card ${proxima ? 'conta-proxima' : ''}`}>
+                    <div className="conta-header">
+                      <div>
+                        <div className="conta-desc">{c.descricao}</div>
+                        {c.fornecedor && <div className="muted">{c.fornecedor}</div>}
+                      </div>
+                      <div className="conta-valor">{formatBRL(c.valor)}</div>
+                    </div>
+                    <div className="conta-meta">
+                      <span className={`status-pill ${proxima ? 'pill-proxima' : 'pill-aberta'}`}>
+                        {proxima ? '⏰ Próxima' : 'Em aberto'}
+                      </span>
+                      {c.dataEmissao && <span className="data-info">Emissão: <strong>{formatDate(c.dataEmissao)}</strong></span>}
+                      <span className="data-info">Vence: <strong>{formatDate(c.vencimento)}</strong></span>
+                      {c.categoria && <span className="tag-small">{c.categoria}</span>}
+                    </div>
+                    {c.codigoBarras && (
+                      <div className="boleto-row">
+                        <div className="boleto-code">{formatBoleto(c.codigoBarras)}</div>
+                        <button className="btn-copy" onClick={() => copiarBoleto(c.codigoBarras, c.id)}>
+                          {copiado === c.id ? <><Check size={14} /> Copiado</> : <><Copy size={14} /> Copiar</>}
+                        </button>
+                      </div>
+                    )}
+                    {c.observacao && <div className="conta-obs">{c.observacao}</div>}
+                    <div className="conta-actions">
+                      <button className="btn-pay" onClick={() => { setDataPagamentoInput(today()); setValorPagoInput(String(c.valor)); setPagarModal(c); }}><CheckCircle2 size={14} /> Marcar como paga</button>
+                      <button className="btn-edit" onClick={() => setEditando({ ...c })}><Pencil size={14} /> Editar</button>
+                      <button className="icon-btn" onClick={() => setConfirmar(c)}><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {pagas.length > 0 && (
@@ -1571,4 +1631,16 @@ const styles = `
   .media-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
   .media-tipos-rec { display: flex; flex-direction: column; gap: 3px; }
   .kpi-value-big { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 26px; line-height: 1.1; margin: 4px 0; }
-`;
+  .contas-split-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  @media (max-width: 860px) { .contas-split-row { grid-template-columns: 1fr; } }
+  .contas-col { display: flex; flex-direction: column; gap: 12px; }
+  .contas-col-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-radius: 10px; margin-bottom: 4px; }
+  .contas-col-header-vencida { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.3); }
+  .contas-col-header-aberta { background: rgba(253,224,71,0.06); border: 1px solid rgba(253,224,71,0.25); }
+  .contas-col-title { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 14px; color: #f4e8ee; }
+  .contas-col-total { font-size: 12px; color: #8a7080; }
+  .btn-icon { background: rgba(192,132,252,0.1); color: #c084fc; border: 1px solid rgba(192,132,252,0.3); padding: 5px 9px; border-radius: 6px; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+  .btn-icon:hover { background: rgba(192,132,252,0.2); }
+  .btn-icon-danger { background: rgba(248,113,113,0.1); color: #f87171; border-color: rgba(248,113,113,0.3); }
+  .btn-icon-danger:hover { background: rgba(248,113,113,0.2); }
+\`;
