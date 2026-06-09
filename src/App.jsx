@@ -1643,4 +1643,4 @@ const styles = `
   .btn-icon:hover { background: rgba(192,132,252,0.2); }
   .btn-icon-danger { background: rgba(248,113,113,0.1); color: #f87171; border-color: rgba(248,113,113,0.3); }
   .btn-icon-danger:hover { background: rgba(248,113,113,0.2); }
-\`;
+`;
