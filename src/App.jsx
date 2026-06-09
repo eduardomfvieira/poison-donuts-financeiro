@@ -378,6 +378,15 @@ function Dashboard({ despesasFiltradas, totalMes, contasAbertas, filtroMes, cont
   const mediaDiariaLoja = diasComReceita > 0 ? receitasMes.reduce((s, r) => s + r.lojaFisica, 0) / diasComReceita : 0;
   const mediaDiariaMetro = diasComReceita > 0 ? receitasMes.reduce((s, r) => s + r.metro, 0) / diasComReceita : 0;
   const mediaDiariaDelivery = diasComReceita > 0 ? receitasMes.reduce((s, r) => s + r.delivery, 0) / diasComReceita : 0;
+  // Estimativa de faturamento do mês (média diária × dias do mês)
+  const diasNoMes = (() => {
+    const [ano, mes] = filtroMes.split('-');
+    return new Date(parseInt(ano), parseInt(mes), 0).getDate();
+  })();
+  const estimativaTotal = mediaDiariaReceita * diasNoMes;
+  const estimativaLoja = mediaDiariaLoja * diasNoMes;
+  const estimativaMetro = mediaDiariaMetro * diasNoMes;
+  const estimativaDelivery = mediaDiariaDelivery * diasNoMes;
   const [compTipoFiltro, setCompTipoFiltro] = useState('todos');
 
   // Comparativo de período livre
@@ -482,6 +491,23 @@ function Dashboard({ despesasFiltradas, totalMes, contasAbertas, filtroMes, cont
                 <span><span className="media-dot" style={{ background: '#a3e635' }} />Loja {formatBRL(mediaDiariaLoja)}</span>
                 <span><span className="media-dot" style={{ background: '#22d3ee' }} />Metro {formatBRL(mediaDiariaMetro)}</span>
                 <span><span className="media-dot" style={{ background: '#c084fc' }} />Deliv. {formatBRL(mediaDiariaDelivery)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="kpi kpi-estimativa" style={{ gridColumn: 'span 2' }}>
+          <div className="kpi-icon" style={{ background: 'rgba(253,224,71,0.1)', color: '#fde047' }}><TrendingUp size={18} /></div>
+          <div className="kpi-content" style={{ flex: 1 }}>
+            <div className="kpi-label">Estimativa do mês ({diasNoMes} dias)</div>
+            <div className="kpi-value" style={{ color: mediaDiariaReceita > 0 ? '#fde047' : '#8a7080' }}>
+              {mediaDiariaReceita > 0 ? formatBRL(estimativaTotal) : '—'}
+            </div>
+            <div className="kpi-sub">Média diária × {diasNoMes} dias do mês</div>
+            {mediaDiariaReceita > 0 && (
+              <div className="media-tipos" style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+                <span><span className="media-dot" style={{ background: '#a3e635' }} />Loja {formatBRL(estimativaLoja)}</span>
+                <span><span className="media-dot" style={{ background: '#22d3ee' }} />Metro {formatBRL(estimativaMetro)}</span>
+                <span><span className="media-dot" style={{ background: '#c084fc' }} />Delivery {formatBRL(estimativaDelivery)}</span>
               </div>
             )}
           </div>
@@ -1631,6 +1657,7 @@ const styles = `
   .media-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
   .media-tipos-rec { display: flex; flex-direction: column; gap: 3px; }
   .kpi-value-big { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 26px; line-height: 1.1; margin: 4px 0; }
+  .kpi-estimativa { background: linear-gradient(135deg, rgba(253,224,71,0.1) 0%, rgba(253,224,71,0.03) 100%); border-color: rgba(253,224,71,0.35); }
   .contas-split-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
   @media (max-width: 860px) { .contas-split-row { grid-template-columns: 1fr; } }
   .contas-col { display: flex; flex-direction: column; gap: 12px; }
