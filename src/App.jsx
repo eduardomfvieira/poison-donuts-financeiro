@@ -268,21 +268,8 @@ export default function App() {
 
       <header className="header">
         <div className="brand">
-          <div className="brand-mark">
-            <svg viewBox="0 0 40 40" width="40" height="40">
-              <circle cx="20" cy="20" r="16" fill="#ff3d8a" />
-              <circle cx="20" cy="20" r="6" fill="#1a0a14" />
-              <circle cx="14" cy="14" r="1.5" fill="#fde047" />
-              <circle cx="26" cy="13" r="1.5" fill="#22d3ee" />
-              <circle cx="27" cy="25" r="1.5" fill="#fde047" />
-              <circle cx="13" cy="26" r="1.5" fill="#a3e635" />
-              <circle cx="20" cy="11" r="1.5" fill="#22d3ee" />
-            </svg>
-          </div>
-          <div>
-            <h1>POISON DONUTS</h1>
-            <p>Financeiro · Ipanema · <span className={syncing ? 'sync-saving' : 'sync-ok'}>{syncing ? 'salvando…' : 'sincronizado'}</span></p>
-          </div>
+          <img src="/logo.png" alt="Poison Donuts" className="logo-img" />
+          <p className="sync-status">Financeiro · <span className={syncing ? 'sync-saving' : 'sync-ok'}>{syncing ? 'salvando…' : 'sincronizado'}</span></p>
         </div>
         <div className="header-actions">
           <input
@@ -383,8 +370,12 @@ function Dashboard({ despesasFiltradas, totalMes, contasAbertas, filtroMes, cont
   }, [despesasFiltradas]);
 
   // Receita e resultado do mês selecionado
-  const totalReceitaMes = (receitas || []).filter(r => r.data && r.data.startsWith(filtroMes)).reduce((s, r) => s + r.total, 0);
+  const receitasMes = (receitas || []).filter(r => r.data && r.data.startsWith(filtroMes));
+  const totalReceitaMes = receitasMes.reduce((s, r) => s + r.total, 0);
   const resultadoBruto = totalReceitaMes - totalMes;
+  const diasComReceita = receitasMes.length;
+  const mediaDiariaReceita = diasComReceita > 0 ? totalReceitaMes / diasComReceita : 0;
+  const [compTipoFiltro, setCompTipoFiltro] = useState('todos');
 
   // Comparativo de período livre
   const comparativoMensal = useMemo(() => {
@@ -396,8 +387,13 @@ function Dashboard({ despesasFiltradas, totalMes, contasAbertas, filtroMes, cont
       const m = cur.toISOString().slice(0, 7);
       const label = m.slice(5, 7) + '/' + m.slice(2, 4);
       const despMes = (despesas || []).filter(d => d.data && d.data.startsWith(m)).reduce((s, d) => s + Number(d.valor), 0);
-      const recMes = (receitas || []).filter(r => r.data && r.data.startsWith(m)).reduce((s, r) => s + r.total, 0);
-      months.push({ mes: label, receita: recMes, despesa: despMes, resultado: recMes - despMes });
+      const rMes = (receitas || []).filter(r => r.data && r.data.startsWith(m));
+      const loja = rMes.reduce((s, r) => s + r.lojaFisica, 0);
+      const metro = rMes.reduce((s, r) => s + r.metro, 0);
+      const delivery = rMes.reduce((s, r) => s + r.delivery, 0);
+      const recMes = loja + metro + delivery;
+      const diasM = rMes.length;
+      months.push({ mes: label, receita: recMes, despesa: despMes, resultado: recMes - despMes, lojaFisica: loja, metro, delivery, mediaDiaria: diasM > 0 ? recMes / diasM : 0 });
       cur.setMonth(cur.getMonth() + 1);
     }
     return months;
@@ -470,6 +466,14 @@ function Dashboard({ despesasFiltradas, totalMes, contasAbertas, filtroMes, cont
               {totalReceitaMes > 0 ? `${((resultadoBruto / totalReceitaMes) * 100).toFixed(1)}%` : '—'}
             </div>
             <div className="kpi-sub">Resultado / Receita</div>
+          </div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-icon" style={{ background: 'rgba(163,230,53,0.12)', color: '#a3e635' }}><BarChart3 size={18} /></div>
+          <div className="kpi-content">
+            <div className="kpi-label">Média diária de receita</div>
+            <div className="kpi-value" style={{ color: '#a3e635' }}>{mediaDiariaReceita > 0 ? formatBRL(mediaDiariaReceita) : '—'}</div>
+            <div className="kpi-sub">{diasComReceita > 0 ? `${diasComReceita} dia${diasComReceita !== 1 ? 's' : ''} com lançamento` : 'Sem lançamentos'}</div>
           </div>
         </div>
       </div>
@@ -593,6 +597,66 @@ function Dashboard({ despesasFiltradas, totalMes, contasAbertas, filtroMes, cont
               <Line type="monotone" dataKey="resultado" stroke="#fde047" strokeWidth={2} dot={{ fill: '#fde047', r: 4 }} name="resultado" />
             </ComposedChart>
           </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Comparativo de receita por canal */}
+      <div className="card">
+        <div className="comp-header">
+          <h3>Receita por canal · mês a mês</h3>
+          <div className="comp-filtros">
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[
+                { key: 'todos', label: 'Todos' },
+                { key: 'lojaFisica', label: 'Loja Física' },
+                { key: 'metro', label: 'Metro' },
+                { key: 'delivery', label: 'Delivery' },
+              ].map(op => (
+                <button
+                  key={op.key}
+                  onClick={() => setCompTipoFiltro(op.key)}
+                  className={compTipoFiltro === op.key ? 'btn-canal-active' : 'btn-canal'}
+                >
+                  {op.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        {comparativoMensal.length === 0 ? (
+          <div className="empty">Selecione um período válido</div>
+        ) : (
+          <>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={comparativoMensal} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#2a1a24" />
+                <XAxis dataKey="mes" stroke="#8a7080" style={{ fontSize: 12 }} />
+                <YAxis stroke="#8a7080" style={{ fontSize: 12 }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
+                <Tooltip
+                  formatter={(v, name) => [formatBRL(v), name === 'lojaFisica' ? 'Loja Física' : name === 'metro' ? 'Metro' : name === 'delivery' ? 'Delivery' : 'Total']}
+                  contentStyle={{ background: '#1a0a14', border: '1px solid #a3e635', borderRadius: 8, color: '#fff' }}
+                />
+                <Legend wrapperStyle={{ fontSize: 12, color: '#d4c4cf' }} formatter={v => v === 'lojaFisica' ? 'Loja Física' : v === 'metro' ? 'Metro' : v === 'delivery' ? 'Delivery' : 'Total'} />
+                {(compTipoFiltro === 'todos' || compTipoFiltro === 'lojaFisica') && (
+                  <Bar dataKey="lojaFisica" fill="#a3e635" opacity={0.9} radius={[3, 3, 0, 0]} name="lojaFisica" stackId={compTipoFiltro === 'todos' ? 'a' : undefined} />
+                )}
+                {(compTipoFiltro === 'todos' || compTipoFiltro === 'metro') && (
+                  <Bar dataKey="metro" fill="#22d3ee" opacity={0.9} radius={[3, 3, 0, 0]} name="metro" stackId={compTipoFiltro === 'todos' ? 'a' : undefined} />
+                )}
+                {(compTipoFiltro === 'todos' || compTipoFiltro === 'delivery') && (
+                  <Bar dataKey="delivery" fill="#c084fc" opacity={0.9} radius={[3, 3, 0, 0]} name="delivery" stackId={compTipoFiltro === 'todos' ? 'a' : undefined} />
+                )}
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="canal-resumo">
+              {comparativoMensal.map(m => (
+                <div key={m.mes} className="canal-resumo-item">
+                  <span className="canal-resumo-mes">{m.mes}</span>
+                  <span style={{ color: '#a3e635' }}>{formatBRL(m.mediaDiaria)}/dia</span>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -767,6 +831,7 @@ function Receitas({ receitas, setReceitas, setSyncing, filtroMes }) {
   const totalLoja = receitasFiltradas.reduce((s, r) => s + r.lojaFisica, 0);
   const totalMetro = receitasFiltradas.reduce((s, r) => s + r.metro, 0);
   const totalDelivery = receitasFiltradas.reduce((s, r) => s + r.delivery, 0);
+  const mediaDiariaRec = receitasFiltradas.length > 0 ? totalMesRec / receitasFiltradas.length : 0;
 
   const salvar = async () => {
     if (!form.data) return;
@@ -851,7 +916,15 @@ function Receitas({ receitas, setReceitas, setSyncing, filtroMes }) {
             <span style={{ fontSize: 12, color: '#8a7080' }}>Loja Física: <strong style={{ color: '#f4e8ee' }}>{formatBRL(totalLoja)}</strong></span>
             <span style={{ fontSize: 12, color: '#8a7080' }}>Metro: <strong style={{ color: '#f4e8ee' }}>{formatBRL(totalMetro)}</strong></span>
             <span style={{ fontSize: 12, color: '#8a7080' }}>Delivery: <strong style={{ color: '#f4e8ee' }}>{formatBRL(totalDelivery)}</strong></span>
-            <span style={{ fontSize: 13, color: '#a3e635', fontWeight: 700, fontFamily: "'Bricolage Grotesque', sans-serif" }}>{formatBRL(totalMesRec)}</span>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+              {mediaDiariaRec > 0 && (
+                <span style={{ fontSize: 12, color: '#8a7080' }}>
+                  Média/dia: <strong style={{ color: '#a3e635' }}>{formatBRL(mediaDiariaRec)}</strong>
+                  <span style={{ color: '#6a5060', marginLeft: 4 }}>({receitasFiltradas.length} dia{receitasFiltradas.length !== 1 ? 's' : ''})</span>
+                </span>
+              )}
+              <span style={{ fontSize: 13, color: '#a3e635', fontWeight: 700, fontFamily: "'Bricolage Grotesque', sans-serif" }}>{formatBRL(totalMesRec)}</span>
+            </div>
           </div>
         </div>
         {receitasFiltradas.length === 0 ? (
@@ -1331,10 +1404,7 @@ const styles = `
   @keyframes spin { to { transform: rotate(360deg); } }
 
   .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 24px; border-bottom: 1px solid #2a1a24; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
-  .brand { display: flex; align-items: center; gap: 16px; }
-  .brand-mark { filter: drop-shadow(0 0 12px rgba(255, 61, 138, 0.4)); }
-  .header h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 24px; color: #ff3d8a; letter-spacing: 0.02em; text-shadow: 0 0 20px rgba(255, 61, 138, 0.3); }
-  .header p { font-size: 11px; color: #8a7080; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.1em; }
+  .brand { display: flex; align-items: center; gap: 12px; flex-direction: column; align-items: flex-start; justify-content: center; }
   .sync-saving { color: #fde047; }
   .sync-ok { color: #a3e635; }
   .header-actions { display: flex; align-items: center; gap: 10px; }
@@ -1469,5 +1539,14 @@ const styles = `
   .comp-filtros { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .comp-filtro-group { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8a7080; }
   .kpi-receita { background: linear-gradient(135deg, rgba(163,230,53,0.15) 0%, rgba(163,230,53,0.04) 100%); border-color: rgba(163,230,53,0.5); flex-direction: column; align-items: flex-start; }
+  .logo-img { height: 52px; width: auto; filter: drop-shadow(0 0 10px rgba(255,61,138,0.35)); }
+  .sync-status { font-size: 11px; color: #8a7080; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.1em; }
+  .btn-canal { padding: 5px 12px; border-radius: 20px; border: 1px solid #3a2a34; background: transparent; color: #8a7080; font-size: 11px; cursor: pointer; transition: all 0.15s; }
+  .btn-canal:hover { border-color: #a3e635; color: #a3e635; }
+  .btn-canal-active { padding: 5px 12px; border-radius: 20px; border: 1px solid #a3e635; background: rgba(163,230,53,0.12); color: #a3e635; font-size: 11px; cursor: pointer; font-weight: 600; }
+  .canal-resumo { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #2a1a24; }
+  .canal-resumo-item { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+  .canal-resumo-mes { color: #8a7080; min-width: 40px; }
   .kpi-value-big { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 26px; line-height: 1.1; margin: 4px 0; }
 `;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
