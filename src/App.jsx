@@ -375,6 +375,9 @@ function Dashboard({ despesasFiltradas, totalMes, contasAbertas, filtroMes, cont
   const resultadoBruto = totalReceitaMes - totalMes;
   const diasComReceita = receitasMes.length;
   const mediaDiariaReceita = diasComReceita > 0 ? totalReceitaMes / diasComReceita : 0;
+  const mediaDiariaLoja = diasComReceita > 0 ? receitasMes.reduce((s, r) => s + r.lojaFisica, 0) / diasComReceita : 0;
+  const mediaDiariaMetro = diasComReceita > 0 ? receitasMes.reduce((s, r) => s + r.metro, 0) / diasComReceita : 0;
+  const mediaDiariaDelivery = diasComReceita > 0 ? receitasMes.reduce((s, r) => s + r.delivery, 0) / diasComReceita : 0;
   const [compTipoFiltro, setCompTipoFiltro] = useState('todos');
 
   // Comparativo de período livre
@@ -474,6 +477,13 @@ function Dashboard({ despesasFiltradas, totalMes, contasAbertas, filtroMes, cont
             <div className="kpi-label">Média diária de receita</div>
             <div className="kpi-value" style={{ color: '#a3e635' }}>{mediaDiariaReceita > 0 ? formatBRL(mediaDiariaReceita) : '—'}</div>
             <div className="kpi-sub">{diasComReceita > 0 ? `${diasComReceita} dia${diasComReceita !== 1 ? 's' : ''} com lançamento` : 'Sem lançamentos'}</div>
+            {diasComReceita > 0 && (
+              <div className="media-tipos">
+                <span><span className="media-dot" style={{ background: '#a3e635' }} />Loja {formatBRL(mediaDiariaLoja)}</span>
+                <span><span className="media-dot" style={{ background: '#22d3ee' }} />Metro {formatBRL(mediaDiariaMetro)}</span>
+                <span><span className="media-dot" style={{ background: '#c084fc' }} />Deliv. {formatBRL(mediaDiariaDelivery)}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -918,10 +928,19 @@ function Receitas({ receitas, setReceitas, setSyncing, filtroMes }) {
             <span style={{ fontSize: 12, color: '#8a7080' }}>Delivery: <strong style={{ color: '#f4e8ee' }}>{formatBRL(totalDelivery)}</strong></span>
             <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
               {mediaDiariaRec > 0 && (
-                <span style={{ fontSize: 12, color: '#8a7080' }}>
-                  Média/dia: <strong style={{ color: '#a3e635' }}>{formatBRL(mediaDiariaRec)}</strong>
-                  <span style={{ color: '#6a5060', marginLeft: 4 }}>({receitasFiltradas.length} dia{receitasFiltradas.length !== 1 ? 's' : ''})</span>
-                </span>
+                <div className="media-tipos-rec">
+                  <span style={{ fontSize: 12, color: '#8a7080' }}>
+                    Média/dia total: <strong style={{ color: '#a3e635' }}>{formatBRL(mediaDiariaRec)}</strong>
+                    <span style={{ color: '#6a5060', marginLeft: 4 }}>({receitasFiltradas.length} dia{receitasFiltradas.length !== 1 ? 's' : ''})</span>
+                  </span>
+                  <span style={{ fontSize: 11, color: '#8a7080' }}>
+                    <span style={{ color: '#a3e635' }}>Loja {formatBRL(receitasFiltradas.length > 0 ? totalLoja / receitasFiltradas.length : 0)}</span>
+                    {' · '}
+                    <span style={{ color: '#22d3ee' }}>Metro {formatBRL(receitasFiltradas.length > 0 ? totalMetro / receitasFiltradas.length : 0)}</span>
+                    {' · '}
+                    <span style={{ color: '#c084fc' }}>Delivery {formatBRL(receitasFiltradas.length > 0 ? totalDelivery / receitasFiltradas.length : 0)}</span>
+                  </span>
+                </div>
               )}
               <span style={{ fontSize: 13, color: '#a3e635', fontWeight: 700, fontFamily: "'Bricolage Grotesque', sans-serif" }}>{formatBRL(totalMesRec)}</span>
             </div>
@@ -1547,5 +1566,9 @@ const styles = `
   .canal-resumo { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #2a1a24; }
   .canal-resumo-item { display: flex; gap: 8px; align-items: center; font-size: 12px; }
   .canal-resumo-mes { color: #8a7080; min-width: 40px; }
+  .media-tipos { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; font-size: 11px; color: #8a7080; }
+  .media-tipos span { display: flex; align-items: center; gap: 4px; }
+  .media-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .media-tipos-rec { display: flex; flex-direction: column; gap: 3px; }
   .kpi-value-big { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 26px; line-height: 1.1; margin: 4px 0; }
 `;
