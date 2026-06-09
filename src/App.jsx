@@ -268,7 +268,7 @@ export default function App() {
 
       <header className="header">
         <div className="brand">
-          <img src="/logo.png" alt="Poison Donuts" className="logo-img" />
+          <img src="/POISON_DONUTS_MASCOTE_VECTOR (1).png" alt="Poison Donuts" className="logo-img" />
           <p className="sync-status">Financeiro · <span className={syncing ? 'sync-saving' : 'sync-ok'}>{syncing ? 'salvando…' : 'sincronizado'}</span></p>
         </div>
         <div className="header-actions">
